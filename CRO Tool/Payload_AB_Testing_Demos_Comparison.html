@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>A/B testing on Payload CMS — Forestack</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+/* ============ Forestack tokens (forestack-brand/assets/tokens.css) ============ */
+:root {
+  --bone:#F0EDE5; --bone-2:#EAE6DB; --bone-3:#DFDACB;
+  --bone-line:rgba(20,18,28,0.08); --bone-line-2:rgba(20,18,28,0.16);
+  --ink:#0E0C14; --ink-2:#14121C; --ink-3:#1F1C28;
+  --ink-line:rgba(240,237,229,0.10); --ink-line-2:rgba(240,237,229,0.18);
+  --t1:#15131C; --t2:#4F4B59; --t3:#87838E; --t4:rgba(20,18,28,0.36);
+  --d1:#F0EDE5; --d2:#B8B5C0; --d3:#7A7682; --d4:rgba(240,237,229,0.34);
+  --accent:#2547D6; --accent-bright:#6B8AF0; --accent-soft:rgba(37,71,214,0.10);
+  --copper:#B8835A; --live:#5BB87C;
+  --expo:cubic-bezier(0.16, 1, 0.3, 1);
+  /* tool identity markers (functional differentiation only) */
+  --posthog:#F54E00; --statsig:#4F6BED; --growthbook:#7C3AED;
+}
+
+* { box-sizing:border-box; margin:0; padding:0; }
+html { -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; text-rendering:optimizeLegibility; }
+body { background:var(--ink); font-family:'Space Grotesk',-apple-system,BlinkMacSystemFont,system-ui,sans-serif; font-feature-settings:'ss01'; overflow:hidden; }
+em { font-style:normal; color:var(--accent); }
+.slide.ink em { color:var(--accent-bright); }
+
+/* ============ Deck runtime ============ */
+.viewport { position:fixed; inset:0; }
+.slide { position:absolute; top:50%; left:50%; width:1920px; height:1080px; transform-origin:center center; visibility:hidden; opacity:0; transition:opacity 0.5s var(--expo); padding:96px 110px 88px; display:flex; flex-direction:column; }
+.slide.active { visibility:visible; opacity:1; }
+.slide.bone { background:var(--bone); color:var(--t1); }
+.slide.ink { background:var(--ink); color:var(--d1); }
+.slide.ink::before { content:''; position:absolute; inset:0; pointer-events:none;
+  background: radial-gradient(ellipse 1100px 600px at 80% 20%, rgba(91,122,233,0.14), transparent 60%),
+              radial-gradient(ellipse 700px 500px at 0% 100%, rgba(184,131,90,0.06), transparent 60%); }
+.slide > * { position:relative; z-index:1; }
+
+/* reveal pattern */
+.reveal { opacity:0; transform:translateY(24px); transition:opacity 0.9s var(--expo), transform 0.9s var(--expo); }
+.slide.active .reveal { opacity:1; transform:translateY(0); }
+.slide.active .reveal:nth-child(2){transition-delay:60ms} .slide.active .reveal:nth-child(3){transition-delay:120ms}
+.slide.active .reveal:nth-child(4){transition-delay:180ms} .slide.active .reveal:nth-child(5){transition-delay:240ms}
+.slide.active .reveal:nth-child(6){transition-delay:240ms} .slide.active .reveal:nth-child(7){transition-delay:240ms}
+
+/* ============ Type ============ */
+.kicker { display:inline-flex; align-items:center; gap:14px; font-size:15px; font-weight:500; letter-spacing:0.22em; color:var(--t3); text-transform:uppercase; }
+.kicker .rom { color:var(--accent); font-feature-settings:'tnum'; letter-spacing:0.16em; }
+.kicker .bar { width:28px; height:1px; background:var(--bone-line-2); display:inline-block; }
+.slide.ink .kicker { color:var(--d3); } .slide.ink .kicker .rom { color:var(--accent-bright); } .slide.ink .kicker .bar { background:var(--ink-line-2); }
+h2.display { font-size:68px; font-weight:600; line-height:0.98; letter-spacing:-0.034em; margin:18px 0 0; text-wrap:balance; }
+.subtitle { font-size:21px; line-height:1.5; letter-spacing:-0.005em; color:var(--t2); max-width:880px; margin-top:22px; }
+.slide.ink .subtitle { color:var(--d2); }
+.num { font-feature-settings:'tnum'; }
+
+/* ============ Footer chrome ============ */
+.foot { position:absolute; left:110px; right:110px; bottom:44px; display:flex; align-items:center; justify-content:space-between; font-size:14px; color:var(--t3); z-index:2; }
+.slide.ink .foot { color:var(--d3); }
+.brand { display:inline-flex; align-items:center; gap:10px; font-weight:600; font-size:17px; letter-spacing:-0.01em; color:var(--t1); }
+.slide.ink .brand { color:var(--d1); }
+.brand svg { width:22px; height:22px; border-radius:4px; }
+.pageno { font-feature-settings:'tnum'; margin-left:18px; color:var(--t3); font-weight:500; }
+.slide.ink .pageno { color:var(--d3); }
+
+/* ============ Components ============ */
+.card { background:#FBFAF6; border:1px solid var(--bone-line-2); border-radius:6px; box-shadow:0 1px 0 rgba(255,255,255,0.6) inset, 0 1px 2px rgba(20,18,28,0.03); }
+.slide.ink .card { background:var(--ink-2); border-color:var(--ink-line-2); box-shadow:none; }
+.canvas-chrome { background:var(--bone); border:1px solid var(--bone-line-2); border-radius:8px; box-shadow:0 1px 0 rgba(255,255,255,0.4) inset, 0 14px 36px -20px rgba(20,18,28,0.14), 0 2px 8px -4px rgba(20,18,28,0.04); position:relative; overflow:hidden; }
+.canvas-chrome::before { content:''; position:absolute; inset:0; background-image:linear-gradient(to right, rgba(20,18,28,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(20,18,28,0.06) 1px, transparent 1px); background-size:28px 28px; -webkit-mask-image:radial-gradient(ellipse 78% 70% at 50% 50%, #000 18%, transparent 92%); mask-image:radial-gradient(ellipse 78% 70% at 50% 50%, #000 18%, transparent 92%); pointer-events:none; }
+.canvas-chrome > * { position:relative; z-index:1; }
+.tooldot { display:inline-block; width:11px; height:11px; border-radius:50%; vertical-align:baseline; margin-right:10px; }
+.chip { display:inline-flex; align-items:center; gap:8px; border-radius:999px; padding:7px 16px; font-size:13px; font-weight:700; letter-spacing:0.16em; text-transform:uppercase; color:#fff; }
+.live-dot { width:8px; height:8px; border-radius:50%; background:var(--live); box-shadow:0 0 0 0 rgba(91,184,124,0.6); animation:livePulse 2.4s var(--expo) infinite; }
+@keyframes livePulse { 0%{box-shadow:0 0 0 0 rgba(91,184,124,0.45)} 70%{box-shadow:0 0 0 10px rgba(91,184,124,0)} 100%{box-shadow:0 0 0 0 rgba(91,184,124,0)} }
+.callout { background:var(--accent-soft); border-radius:8px; padding:16px 24px; font-size:16.5px; color:var(--t1); }
+.callout b { color:var(--accent); letter-spacing:0.1em; font-size:14px; }
+.label { font-size:12.5px; font-weight:700; letter-spacing:0.22em; text-transform:uppercase; color:var(--t3); }
+.slide.ink .label { color:var(--d3); }
+
+/* numbered brief rows */
+.brief { border-top:1px solid var(--bone-line-2); padding:16px 0 18px; display:grid; grid-template-columns:64px 1fr; column-gap:0; }
+.brief .n { font-size:22px; font-weight:600; color:var(--accent); font-feature-settings:'tnum'; }
+.brief h4 { font-size:21px; font-weight:600; letter-spacing:-0.018em; }
+.brief p { font-size:15.5px; line-height:1.45; color:var(--t2); margin-top:5px; }
+
+/* nav arrows */
+.deck-nav { position:fixed; right:14px; bottom:14px; display:flex; gap:8px; z-index:50; }
+.deck-nav button { width:36px; height:36px; border-radius:999px; border:1px solid rgba(240,237,229,0.28); background:transparent; color:var(--d1); font-size:17px; cursor:pointer; font-family:inherit; transition:background 0.4s var(--expo), border-color 0.4s var(--expo); }
+.deck-nav button:hover { background:rgba(240,237,229,0.06); border-color:var(--accent-bright); }
+@media (prefers-reduced-motion:reduce) {
+  *, *::before, *::after { animation-duration:0.01ms !important; transition-duration:0.01ms !important; }
+  .reveal { opacity:1 !important; transform:none !important; }
+}
+</style>
+</head>
+<body>
+<div class="viewport" id="viewport">
+
+<!-- ============ SLIDE 1 — TITLE (ink) ============ -->
+<section class="slide ink">
+  <div style="margin-top:120px">
+    <div class="reveal brand" style="font-size:34px; gap:14px"><svg viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg"><rect width="180" height="180" fill="#2547D6"/><g transform="translate(42 40.5) scale(0.2866)" fill="#FFFFFF"><path d="M43 0H325C330.523 0 335 4.47715 335 10V90C335 95.5228 330.523 100 325 100H43V0Z"/><path d="M43 124H183C188.523 124 193 128.477 193 134V214C193 219.523 188.523 224 183 224H43V124Z"/><path d="M43 248H83C88.5228 248 93 252.477 93 258V338C93 343.523 88.5228 348 83 348H43V248Z"/><rect width="27" height="348" rx="5"/></g></svg> Forestack</div>
+    <div class="reveal" style="width:64px; height:7px; background:var(--accent-bright); margin:26px 0 56px"></div>
+    <div class="reveal kicker" style="font-size:16px"><span class="live-dot"></span> CRO TOOLING RESEARCH <span class="bar"></span> DCBEL PHASE ONE</div>
+    <h2 class="reveal display" style="font-size:118px; max-width:18ch; margin-top:28px">A/B testing on <em>Payload CMS</em>.</h2>
+    <p class="reveal subtitle" style="font-size:24px; max-width:1080px">One experiment, built three times. A working, like-for-like comparison of PostHog, Statsig and GrowthBook on the stack behind the Phase One landing experience.</p>
+  </div>
+  <div class="foot">
+    <span style="display:flex; gap:56px">
+      <span><span class="tooldot" style="background:var(--posthog)"></span>PostHog · :3000</span>
+      <span><span class="tooldot" style="background:var(--statsig)"></span>Statsig · :3001</span>
+      <span><span class="tooldot" style="background:var(--growthbook)"></span>GrowthBook · :3002</span>
+    </span>
+    <span>June 2026 · all three demos live &amp; seeded</span>
+  </div>
+</section>
+
+<!-- ============ SLIDE 2 — METHOD (bone) ============ -->
+<section class="slide bone">
+  <div class="reveal kicker"><span class="rom">02</span><span class="bar"></span> Why this comparison is fair</div>
+  <h2 class="reveal display">One experiment, built three times.</h2>
+  <div class="reveal" style="display:grid; grid-template-columns:1fr 1.05fr; gap:72px; margin-top:auto; margin-bottom:auto">
+    <div>
+      <p style="font-size:19px; line-height:1.6; color:var(--t2)"><strong style="color:var(--t1)">The task.</strong> Confirm A/B testing tooling works with Payload CMS, the headless CMS behind the dcbel Phase One landing experience, before recommending one to the client.</p>
+      <p style="font-size:19px; line-height:1.6; color:var(--t2); margin-top:28px"><strong style="color:var(--t1)">The method.</strong> The exact same experiment was implemented three times. Everything is identical except the experimentation layer, so every difference you see is the tool, not the build.</p>
+      <div style="display:flex; gap:64px; margin-top:64px">
+        <div><div class="num" style="font-size:56px; font-weight:600; color:var(--accent); letter-spacing:-0.034em">3</div><div class="label" style="margin-top:6px">Working demos</div></div>
+        <div><div class="num" style="font-size:56px; font-weight:600; color:var(--accent); letter-spacing:-0.034em">10</div><div class="label" style="margin-top:6px">Seeded CA ZIPs</div></div>
+        <div><div class="num" style="font-size:56px; font-weight:600; color:var(--accent); letter-spacing:-0.034em">3</div><div class="label" style="margin-top:6px">Hero variants</div></div>
+        <div><div class="num" style="font-size:56px; font-weight:600; color:var(--accent); letter-spacing:-0.034em">1</div><div class="label" style="margin-top:6px">Conversion metric</div></div>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:20px">
+      <div class="card" style="padding:26px 32px"><h4 style="font-size:21px; letter-spacing:-0.018em">Same scenario</h4><p style="font-size:16px; color:var(--t2); margin-top:6px">ZIP-gated Phase One landing page. Qualifying visitors get the hero test, the rest a waitlist.</p></div>
+      <div class="card" style="padding:26px 32px"><h4 style="font-size:21px; letter-spacing:-0.018em">Same data</h4><p style="font-size:16px; color:var(--t2); margin-top:6px">zip-targets mirrors the lakehouse seed zip_value_scored_4states: fit score, tier, is_phase1.</p></div>
+      <div class="card" style="padding:26px 32px"><h4 style="font-size:21px; letter-spacing:-0.018em">Same 3-way test</h4><p style="font-size:16px; color:var(--t2); margin-top:6px">Hero copy framings (benefit, scarcity, savings) and one CTA conversion metric.</p></div>
+      <p style="font-size:15px; color:var(--t3); font-style:italic">Every demo was verified with real requests: all variants render, assignment is sticky per browser, conversions are recorded.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Payload CMS × A/B testing — three working demos</span><span class="brand"><svg viewBox="0 0 180 180"><rect width="180" height="180" fill="#2547D6"/><g transform="translate(42 40.5) scale(0.2866)" fill="#FFF"><path d="M43 0H325C330.523 0 335 4.47715 335 10V90C335 95.5228 330.523 100 325 100H43V0Z"/><path d="M43 124H183C188.523 124 193 128.477 193 134V214C193 219.523 188.523 224 183 224H43V124Z"/><path d="M43 248H83C88.5228 248 93 252.477 93 258V338C93 343.523 88.5228 348 83 348H43V248Z"/><rect width="27" height="348" rx="5"/></g></svg>Forestack<span class="pageno">2 / 12</span></span></div>
+</section>
+
+<!-- ============ SLIDE 3 — SCENARIO (bone) ============ -->
+<section class="slide bone">
+  <div class="reveal kicker"><span class="rom">03</span><span class="bar"></span> The shared demo scenario</div>
+  <h2 class="reveal display">ZIP gate, 3-way hero test, conversion.</h2>
+  <div class="reveal" style="display:flex; align-items:center; gap:22px; margin-top:auto">
+    <div class="card" style="padding:20px 26px; width:300px"><h4 style="font-size:18px">Visitor enters ZIP</h4><p style="font-size:14px; color:var(--t2); margin-top:4px">string, 5 digits, leading zeros kept</p></div>
+    <div style="color:var(--t3); font-size:24px">→</div>
+    <div class="card" style="padding:20px 26px; width:320px"><h4 style="font-size:18px">zip-targets lookup</h4><p style="font-size:14px; color:var(--t2); margin-top:4px">fit score · tier · is_phase1</p></div>
+    <div style="color:var(--t3); font-size:24px">→</div>
+    <div style="display:flex; flex-direction:column; gap:14px">
+      <div style="background:var(--accent-soft); border:1px solid var(--accent); border-radius:6px; padding:14px 22px; width:330px"><h4 style="font-size:17px; color:var(--accent)">is_phase1 = true</h4><p style="font-size:13.5px; color:var(--t2)">hero with live A/B test</p></div>
+      <div class="card" style="padding:14px 22px; width:330px"><h4 style="font-size:17px">is_phase1 = false</h4><p style="font-size:13.5px; color:var(--t2)">waitlist page, no experiment</p></div>
+    </div>
+    <div style="color:var(--t3); font-size:24px; margin-top:-66px">→</div>
+    <div class="card" style="padding:20px 26px; width:300px; margin-top:-66px"><h4 style="font-size:18px">CTA click</h4><p style="font-size:14px; color:var(--t2); margin-top:4px">conversion event, variant + ZIP</p></div>
+  </div>
+  <h3 class="reveal" style="font-size:24px; font-weight:600; letter-spacing:-0.018em; margin-top:60px">The three hero framings, identical in all three demos</h3>
+  <div class="reveal" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:24px; margin-top:22px">
+    <div class="card" style="padding:24px 28px; border-left:5px solid var(--accent)"><div class="label" style="color:var(--t1)">control · benefit</div><p style="font-size:18px; font-style:italic; color:var(--t2); margin-top:10px">“Charge your EV with sunshine”</p><p style="font-size:14px; color:var(--t3); margin-top:8px">CTA: Get a free home assessment</p></div>
+    <div class="card" style="padding:24px 28px; border-left:5px solid var(--accent)"><div class="label" style="color:var(--t1)">scarcity · exclusivity</div><p style="font-size:18px; font-style:italic; color:var(--t2); margin-top:10px">“Your neighborhood made the Phase One list”</p><p style="font-size:14px; color:var(--t3); margin-top:8px">CTA: Claim my Phase One spot</p></div>
+    <div class="card" style="padding:24px 28px; border-left:5px solid var(--accent)"><div class="label" style="color:var(--t1)">savings · dollars</div><p style="font-size:18px; font-style:italic; color:var(--t2); margin-top:10px">“Stop renting your power back from the grid”</p><p style="font-size:14px; color:var(--t3); margin-top:8px">CTA: Calculate my savings</p></div>
+  </div>
+  <p class="reveal" style="font-size:15.5px; font-style:italic; color:var(--t3); margin-top:26px; margin-bottom:auto">PostHog runs this as 2 arms, a payload-ab plugin limit, not PostHog’s (the platform allows up to 10). Statsig and GrowthBook run all 3.</p>
+  <div class="foot"><span>Payload CMS × A/B testing — three working demos</span><span class="brand"><svg viewBox="0 0 180 180"><rect width="180" height="180" fill="#2547D6"/><g transform="translate(42 40.5) scale(0.2866)" fill="#FFF"><path d="M43 0H325C330.523 0 335 4.47715 335 10V90C335 95.5228 330.523 100 325 100H43V0Z"/><path d="M43 124H183C188.523 124 193 128.477 193 134V214C193 219.523 188.523 224 183 224H43V124Z"/><path d="M43 248H83C88.5228 248 93 252.477 93 258V338C93 343.523 88.5228 348 83 348H43V248Z"/><rect width="27" height="348" rx="5"/></g></svg>Forestack<span class="pageno">3 / 12</span></span></div>
+</section>
+
+<!-- ============ SLIDES 4-6 — TOOLS (bone) — generated by JS template below ============ -->
+<section class="slide bone" data-tool="posthog"></section>
+<section class="slide bone" data-tool="statsig"></section>
+<section class="slide bone" data-tool="growthbook"></section>
+
+<!-- ============ SLIDE 7 — MATRIX (bone) ============ -->
+<section class="slide bone">
+  <div class="reveal kicker"><span class="rom">07</span><span class="bar"></span> Head-to-head</div>
+  <h2 class="reveal display">Ten dimensions, three tools.</h2>
+  <div class="reveal canvas-chrome" style="margin-top:48px; padding:36px 44px">
+    <table id="matrix" style="width:100%; border-collapse:collapse; font-size:16px">
+      <thead></thead><tbody></tbody>
+    </table>
+  </div>
+  <div class="foot"><span>Payload CMS × A/B testing — three working demos</span><span class="brand"><svg viewBox="0 0 180 180"><rect width="180" height="180" fill="#2547D6"/><g transform="translate(42 40.5) scale(0.2866)" fill="#FFF"><path d="M43 0H325C330.523 0 335 4.47715 335 10V90C335 95.5228 330.523 100 325 100H43V0Z"/><path d="M43 124H183C188.523 124 193 128.477 193 134V214C193 219.523 188.523 224 183 224H43V124Z"/><path d="M43 248H83C88.5228 248 93 252.477 93 258V338C93 343.523 88.5228 348 83 348H43V248Z"/><rect width="27" height="348" rx="5"/></g></svg>Forestack<span class="pageno">7 / 12</span></span></div>
+</section>
+
+<!-- ============ SLIDE 8 — VERDICTS (ink) ============ -->
+<section class="slide ink">
+  <div class="reveal kicker"><span class="rom">08</span><span class="bar"></span> The four questions</div>
+  <h2 class="reveal display">Verdicts.</h2>
+  <div class="reveal" style="display:grid; grid-template-columns:1fr 1fr; gap:26px; margin-top:auto">
+    <div class="card" style="padding:30px 36px"><div class="label">Fastest to ship</div><h3 style="font-size:30px; margin-top:8px"><span class="tooldot" style="background:var(--posthog)"></span>PostHog</h3><p style="font-size:16.5px; color:var(--d2); margin-top:10px; line-height:1.5">Working A/B test in an afternoon: install payload-ab, one config line, edit the variant in the admin tab.</p></div>
+    <div class="card" style="padding:30px 36px"><div class="label">Fastest at runtime</div><h3 style="font-size:30px; margin-top:8px"><span class="tooldot" style="background:var(--growthbook)"></span>GrowthBook</h3><p style="font-size:16.5px; color:var(--d2); margin-top:10px; line-height:1.5">Bucketing is a local hash with zero network per request. Statsig is a close second; PostHog as wired calls its API per visitor.</p></div>
+    <div class="card" style="padding:30px 36px"><div class="label">Most features</div><h3 style="font-size:30px; margin-top:8px"><span class="tooldot" style="background:var(--posthog)"></span>PostHog</h3><p style="font-size:16.5px; color:var(--d2); margin-top:10px; line-height:1.5">One subscription covers experiments, product analytics, session replay, funnels, surveys and heatmaps.</p></div>
+    <div class="card" style="padding:30px 36px"><div class="label">Most useful for dcbel</div><h3 style="font-size:30px; margin-top:8px"><span class="tooldot" style="background:var(--growthbook)"></span>GrowthBook</h3><p style="font-size:16.5px; color:var(--d2); margin-top:10px; line-height:1.5">Warehouse-native results keep the Fabric lakehouse as the source of truth; open source removes per-event pricing.</p></div>
+  </div>
+  <p class="reveal" style="font-size:16px; font-style:italic; color:var(--d2); margin-top:34px; margin-bottom:auto">“Best” has no single answer. The next two slides unpack speed and best by yardstick.</p>
+  <div class="foot"><span>Payload CMS × A/B testing — three working demos</span><span class="brand"><svg viewBox="0 0 180 180"><rect width="180" height="180" fill="#2547D6"/><g transform="translate(42 40.5) scale(0.2866)" fill="#FFF"><path d="M43 0H325C330.523 0 335 4.47715 335 10V90C335 95.5228 330.523 100 325 100H43V0Z"/><path d="M43 124H183C188.523 124 193 128.477 193 134V214C193 219.523 188.523 224 183 224H43V124Z"/><path d="M43 248H83C88.5228 248 93 252.477 93 258V338C93 343.523 88.5228 348 83 348H43V248Z"/><rect width="27" height="348" rx="5"/></g></svg>Forestack<span class="pageno">8 / 12</span></span></div>
+</section>
+
+<!-- ============ SLIDE 9 — FASTEST (bone) ============ -->
+<section class="slide bone">
+  <div class="reveal kicker"><span class="rom">09</span><span class="bar"></span> Verdicts 1 &amp; 2 unpacked</div>
+  <h2 class="reveal display">“Fastest” is two different races.</h2>
+  <div class="reveal" style="display:grid; grid-template-columns:1fr 1fr; gap:80px; margin-top:auto; margin-bottom:auto">
+    <div>
+      <h3 style="font-size:23px; font-weight:600; letter-spacing:-0.018em">Race 1: hands-on time to first live experiment</h3>
+      <div style="margin-top:36px; display:flex; flex-direction:column; gap:26px">
+        <div><div style="display:flex; justify-content:space-between; font-size:17px; margin-bottom:8px"><span><span class="tooldot" style="background:var(--posthog)"></span>PostHog</span><span class="num" style="font-weight:600">0.5 days</span></div><div style="height:14px; background:var(--bone-2); border-radius:999px"><div style="width:25%; height:100%; background:var(--accent); border-radius:999px"></div></div></div>
+        <div><div style="display:flex; justify-content:space-between; font-size:17px; margin-bottom:8px"><span><span class="tooldot" style="background:var(--growthbook)"></span>GrowthBook</span><span class="num" style="font-weight:600">1.0 day</span></div><div style="height:14px; background:var(--bone-2); border-radius:999px"><div style="width:50%; height:100%; background:var(--accent); border-radius:999px"></div></div></div>
+        <div><div style="display:flex; justify-content:space-between; font-size:17px; margin-bottom:8px"><span><span class="tooldot" style="background:var(--statsig)"></span>Statsig</span><span class="num" style="font-weight:600">1.5 days</span></div><div style="height:14px; background:var(--bone-2); border-radius:999px"><div style="width:75%; height:100%; background:var(--accent); border-radius:999px"></div></div></div>
+      </div>
+      <p style="font-size:15px; font-style:italic; color:var(--t3); margin-top:32px">Estimated engineer-days, based on actually building these demos: plugin install versus writing and testing the glue.</p>
+    </div>
+    <div>
+      <h3 style="font-size:23px; font-weight:600; letter-spacing:-0.018em">Race 2: work done on every page view</h3>
+      <div style="margin-top:30px">
+        <div class="brief"><div class="n">01</div><div><h4>GrowthBook: in-process hash</h4><p>No network on the request path at all. The same deterministic hash runs even with no account connected.</p></div></div>
+        <div class="brief"><div class="n">02</div><div><h4>Statsig: local eval after sync</h4><p>Rules download once at init; each request is then evaluated in-process.</p></div></div>
+        <div class="brief" style="border-bottom:1px solid var(--bone-line-2)"><div class="n">03</div><div><h4>PostHog: API call per visitor</h4><p>As wired by payload-ab, every new visitor’s flag check is a network round-trip (local evaluation exists, the plugin skips it).</p></div></div>
+      </div>
+      <div class="callout" style="margin-top:30px"><b>WHY IT MATTERS:</b>&nbsp; <span style="font-style:italic">flag latency taxes the very page being optimized.</span></div>
+    </div>
+  </div>
+  <div class="foot"><span>Payload CMS × A/B testing — three working demos</span><span class="brand"><svg viewBox="0 0 180 180"><rect width="180" height="180" fill="#2547D6"/><g transform="translate(42 40.5) scale(0.2866)" fill="#FFF"><path d="M43 0H325C330.523 0 335 4.47715 335 10V90C335 95.5228 330.523 100 325 100H43V0Z"/><path d="M43 124H183C188.523 124 193 128.477 193 134V214C193 219.523 188.523 224 183 224H43V124Z"/><path d="M43 248H83C88.5228 248 93 252.477 93 258V338C93 343.523 88.5228 348 83 348H43V248Z"/><rect width="27" height="348" rx="5"/></g></svg>Forestack<span class="pageno">9 / 12</span></span></div>
+</section>
+
+<!-- ============ SLIDE 10 — YARDSTICKS (bone) ============ -->
+<section class="slide bone">
+  <div class="reveal kicker"><span class="rom">10</span><span class="bar"></span> Verdict 3 unpacked</div>
+  <h2 class="reveal display">Best depends on the yardstick.</h2>
+  <div class="reveal" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:26px; margin-top:auto; margin-bottom:auto">
+    <div class="card" style="padding:34px 36px">
+      <div class="num" style="font-size:44px; font-weight:600; color:var(--accent); letter-spacing:-0.034em">01</div>
+      <div class="label" style="margin-top:14px">Authoring experience</div>
+      <h3 style="font-size:30px; margin-top:8px; letter-spacing:-0.024em"><span class="tooldot" style="background:var(--posthog)"></span>PostHog</h3>
+      <p style="font-size:16.5px; color:var(--t2); line-height:1.55; margin-top:14px">Editors run tests without leaving the Payload admin: a dedicated A/B tab per document, flags created for them, replay one click away.</p>
+      <div style="border-top:1px solid var(--bone-line-2); margin-top:24px; padding-top:14px; font-size:14.5px"><b style="color:var(--t3); letter-spacing:0.1em">ANSWERS:</b> <span style="font-style:italic">Who lets marketing move fastest?</span></div>
+    </div>
+    <div class="card" style="padding:34px 36px">
+      <div class="num" style="font-size:44px; font-weight:600; color:var(--accent); letter-spacing:-0.034em">02</div>
+      <div class="label" style="margin-top:14px">Experimentation engine</div>
+      <h3 style="font-size:30px; margin-top:8px; letter-spacing:-0.024em"><span class="tooldot" style="background:var(--statsig)"></span>Statsig</h3>
+      <p style="font-size:16.5px; color:var(--t2); line-height:1.55; margin-top:14px">CUPED variance reduction, sequential testing, layers and holdouts. Built for programs running hundreds of concurrent tests.</p>
+      <div style="border-top:1px solid var(--bone-line-2); margin-top:24px; padding-top:14px; font-size:14.5px"><b style="color:var(--t3); letter-spacing:0.1em">ANSWERS:</b> <span style="font-style:italic">Who has the strongest stats?</span></div>
+    </div>
+    <div class="card" style="padding:34px 36px">
+      <div class="num" style="font-size:44px; font-weight:600; color:var(--accent); letter-spacing:-0.034em">03</div>
+      <div class="label" style="margin-top:14px">Ownership &amp; fit</div>
+      <h3 style="font-size:30px; margin-top:8px; letter-spacing:-0.024em"><span class="tooldot" style="background:var(--growthbook)"></span>GrowthBook</h3>
+      <p style="font-size:16.5px; color:var(--t2); line-height:1.55; margin-top:14px">Open source and self-hostable. Results are computed from your own warehouse, so the Fabric lakehouse stays the source of truth.</p>
+      <div style="border-top:1px solid var(--bone-line-2); margin-top:24px; padding-top:14px; font-size:14.5px"><b style="color:var(--t3); letter-spacing:0.1em">ANSWERS:</b> <span style="font-style:italic">Who fits the dcbel stack best?</span></div>
+    </div>
+  </div>
+  <div class="foot"><span>Payload CMS × A/B testing — three working demos</span><span class="brand"><svg viewBox="0 0 180 180"><rect width="180" height="180" fill="#2547D6"/><g transform="translate(42 40.5) scale(0.2866)" fill="#FFF"><path d="M43 0H325C330.523 0 335 4.47715 335 10V90C335 95.5228 330.523 100 325 100H43V0Z"/><path d="M43 124H183C188.523 124 193 128.477 193 134V214C193 219.523 188.523 224 183 224H43V124Z"/><path d="M43 248H83C88.5228 248 93 252.477 93 258V338C93 343.523 88.5228 348 83 348H43V248Z"/><rect width="27" height="348" rx="5"/></g></svg>Forestack<span class="pageno">10 / 12</span></span></div>
+</section>
+
+<!-- ============ SLIDE 11 — RISK & COST (bone) ============ -->
+<section class="slide bone">
+  <div class="reveal kicker"><span class="rom">11</span><span class="bar"></span> Before you choose</div>
+  <h2 class="reveal display">Risk and cost, honestly.</h2>
+  <div class="reveal" id="riskgrid" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:26px; margin-top:auto; margin-bottom:auto"></div>
+  <div class="foot"><span>Payload CMS × A/B testing — three working demos</span><span class="brand"><svg viewBox="0 0 180 180"><rect width="180" height="180" fill="#2547D6"/><g transform="translate(42 40.5) scale(0.2866)" fill="#FFF"><path d="M43 0H325C330.523 0 335 4.47715 335 10V90C335 95.5228 330.523 100 325 100H43V0Z"/><path d="M43 124H183C188.523 124 193 128.477 193 134V214C193 219.523 188.523 224 183 224H43V124Z"/><path d="M43 248H83C88.5228 248 93 252.477 93 258V338C93 343.523 88.5228 348 83 348H43V248Z"/><rect width="27" height="348" rx="5"/></g></svg>Forestack<span class="pageno">11 / 12</span></span></div>
+</section>
+
+<!-- ============ SLIDE 12 — RECOMMENDATION (ink) ============ -->
+<section class="slide ink">
+  <div class="reveal kicker"><span class="rom">12</span><span class="bar"></span> Recommendation &amp; next steps</div>
+  <h2 class="reveal display" style="font-size:60px">Pick by the question you’re answering.</h2>
+  <div class="reveal" style="display:grid; grid-template-columns:1.15fr 0.85fr; gap:72px; margin-top:auto; margin-bottom:auto">
+    <div style="display:flex; flex-direction:column; gap:18px">
+      <div class="card" style="padding:22px 30px; border-left:5px solid var(--accent-bright)"><p style="font-size:17px; color:var(--d2)">“We want a live test this week” &nbsp;→&nbsp; <strong style="color:var(--d1); font-size:19px">PostHog</strong></p><p style="font-size:14.5px; font-style:italic; color:var(--d3); margin-top:5px">Accept 2-arm tests and plugin risk; vendor the source.</p></div>
+      <div class="card" style="padding:22px 30px; border-left:5px solid var(--accent-bright)"><p style="font-size:17px; color:var(--d2)">“We’re building an experimentation program” &nbsp;→&nbsp; <strong style="color:var(--d1); font-size:19px">Statsig</strong></p><p style="font-size:14.5px; font-style:italic; color:var(--d3); margin-top:5px">Strongest engine; budget for the glue and vendor data.</p></div>
+      <div class="card" style="padding:22px 30px; border-left:5px solid var(--accent-bright)"><p style="font-size:17px; color:var(--d2)">“The lakehouse is our source of truth” &nbsp;→&nbsp; <strong style="color:var(--d1); font-size:19px">GrowthBook</strong></p><p style="font-size:14.5px; font-style:italic; color:var(--d3); margin-top:5px">Warehouse-native and open source. The strategic fit.</p></div>
+      <div style="border-top:1px solid var(--ink-line-2); margin-top:14px; padding-top:18px; font-size:16px; color:var(--d2)">Live demos: PostHog :3000 · Statsig :3001 · GrowthBook :3002 — <span class="num">start-demo.ps1</span> in each project, admin demo@dcbel.com / demo1234</div>
+    </div>
+    <div>
+      <div class="label" style="color:var(--accent-bright)">Next steps</div>
+      <ol style="margin:22px 0 0 22px; display:flex; flex-direction:column; gap:18px; font-size:17.5px; color:var(--d2); line-height:1.45">
+        <li>Align with the client on the yardstick: speed, program, or ownership</li>
+        <li>Wire real keys into the chosen demo (.env plus console setup)</li>
+        <li>Production-harden: Postgres, the full 170-ZIP list, lakehouse joins</li>
+        <li>Decide the PostHog-plugin fallback: vendor the source or fork it</li>
+      </ol>
+    </div>
+  </div>
+  <div class="foot"><span>A senior data &amp; AI agency. &nbsp;·&nbsp; Founder-led. &nbsp;·&nbsp; Embedded.</span><span class="brand"><svg viewBox="0 0 180 180"><rect width="180" height="180" fill="#2547D6"/><g transform="translate(42 40.5) scale(0.2866)" fill="#FFF"><path d="M43 0H325C330.523 0 335 4.47715 335 10V90C335 95.5228 330.523 100 325 100H43V0Z"/><path d="M43 124H183C188.523 124 193 128.477 193 134V214C193 219.523 188.523 224 183 224H43V124Z"/><path d="M43 248H83C88.5228 248 93 252.477 93 258V338C93 343.523 88.5228 348 83 348H43V248Z"/><rect width="27" height="348" rx="5"/></g></svg>Forestack<span class="pageno">12 / 12</span></span></div>
+</section>
+
+</div>
+
+<div class="deck-nav"><button id="prev" aria-label="Previous slide">←</button><button id="next" aria-label="Next slide">→</button></div>
+
+<script>
+// ---------- data for templated slides ----------
+const TOOLS = {
+  posthog: {
+    n:'04', name:'PostHog with payload-ab', kicker:'Demo 01 · The turnkey plugin route', color:'var(--posthog)', port:':3000',
+    rows:[
+      ['Dedicated plugin: payload-ab v0.3.5','One line in payload.config.ts adds an A/B tab to any collection. Variant fields clone from the original.'],
+      ['PostHog feature flags drive assignment','Each document maps to a flag. getServerSideABVariant() asks PostHog which copy a visitor gets.'],
+      ['Marketing-friendly authoring','Editors toggle a test on and edit both versions inside the Payload admin.'],
+      ['Full product-analytics suite attached','Experiments sit next to session replay, funnels, surveys and heatmaps.'],
+    ],
+    shines:['Fastest path to a live test: working in an afternoon','Best authoring UX of the three (admin A/B tab)','Experiments and analytics in one subscription'],
+    watch:['Two variants only (control / variant)','Plugin repo went private; single community maintainer','No offline fallback: without keys it silently serves control'],
+    one:'the quick pragmatic win. Ship a real A/B test this week; accept plugin risk and 2-arm tests.', page:'4 / 12',
+  },
+  statsig: {
+    n:'05', name:'Statsig, built by hand', kicker:'Demo 02 · The enterprise engine route', color:'var(--statsig)', port:':3001',
+    rows:[
+      ['No Payload integration exists','Only native CMS link is Contentful, so the demo replicates Statsig’s variant-container pattern in ~120 lines.'],
+      ['Variant container in the CMS','Document = experiment id plus an array of named variations; the variant_key parameter picks the row.'],
+      ['Server-side conversions, zero client SDK','CTA posts to /api/track, then Statsig.logEvent with the server secret. Nothing ships to the browser.'],
+      ['True n-way tests plus preview override','Three arms live now; ?force=scarcity previews any arm in client demos.'],
+    ],
+    shines:['Strongest stats engine: CUPED, sequential testing, layers','n-way variants straight from a CMS array','Server-only tracking, lightest page weight'],
+    watch:['Most DIY of the three; the glue is ours to maintain','Event data lives in Statsig’s cloud','Needs the console experiment configured before leaving local mode'],
+    one:'the heavyweight option. Earns its keep when you run a real experimentation program at scale.', page:'5 / 12',
+  },
+  growthbook: {
+    n:'06', name:'GrowthBook, built by hand', kicker:'Demo 03 · The open-source, warehouse-native route', color:'var(--growthbook)', port:':3002',
+    rows:[
+      ['Official CMS pattern, ported from Strapi','A numeric feature value is the index into the variants array (0 = control). ~100 lines of glue.'],
+      ['Deterministic local bucketing','Assignment is a hash computed inside the SDK. Zero network per request; offline mode uses the real algorithm.'],
+      ['Your data stays yours','GrowthBook never collects events. Exposures and conversions land in an ab-events collection; production points at the Fabric lakehouse.'],
+      ['Open source, self-hostable','docker compose up runs the whole platform on your infra. A cloud tier exists too.'],
+    ],
+    shines:['Native offline story: real hashing with no account','Results computed from your own warehouse (Fabric fits)','OSS: no per-event vendor pricing at scale'],
+    watch:['Scorecards need a connected warehouse and defined metrics','Self-hosting adds ops burden (cloud tier avoids it)','Authoring is a plain array field, no admin tab'],
+    one:'the best long-term fit for dcbel. The lakehouse stays the single source of truth.', page:'6 / 12',
+  },
+};
+
+const FOOT_BRAND = document.querySelector('.brand').outerHTML.replace('font-size:34px; gap:14px', '');
+
+document.querySelectorAll('.slide[data-tool]').forEach(sl => {
+  const t = TOOLS[sl.dataset.tool];
+  sl.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:flex-start">
+      <div>
+        <div class="reveal kicker"><span class="rom">${t.n}</span><span class="bar"></span> ${t.kicker}</div>
+        <h2 class="reveal display">${t.name}.</h2>
+      </div>
+      <span class="chip reveal" style="background:${t.color}; margin-top:14px">localhost${t.port}</span>
+    </div>
+    <div class="reveal" style="display:grid; grid-template-columns:1.05fr 0.95fr; gap:72px; margin-top:auto; margin-bottom:auto">
+      <div>
+        ${t.rows.map((r,i)=>`<div class="brief"${i===t.rows.length-1?' style="border-bottom:1px solid var(--bone-line-2)"':''}><div class="n">${String(i+1).padStart(2,'0')}</div><div><h4>${r[0]}</h4><p>${r[1]}</p></div></div>`).join('')}
+      </div>
+      <div style="display:flex; flex-direction:column; gap:24px">
+        <div class="card" style="padding:26px 32px">
+          <div class="label">Where it shines</div>
+          <ul style="list-style:none; margin-top:14px; display:flex; flex-direction:column; gap:10px">
+            ${t.shines.map(x=>`<li style="font-size:16px; color:var(--t2); padding-left:26px; position:relative"><span style="position:absolute; left:0; top:0.62em; width:14px; height:2px; background:var(--accent)"></span>${x}</li>`).join('')}
+          </ul>
+        </div>
+        <div class="card" style="padding:26px 32px">
+          <div class="label">Watch out for</div>
+          <ul style="list-style:none; margin-top:14px; display:flex; flex-direction:column; gap:10px">
+            ${t.watch.map(x=>`<li style="font-size:16px; color:var(--t2); padding-left:26px; position:relative"><span style="position:absolute; left:0; top:0.62em; width:14px; height:2px; background:var(--copper)"></span>${x}</li>`).join('')}
+          </ul>
+        </div>
+        <div class="callout"><b>IN ONE LINE:</b>&nbsp; <span style="font-style:italic">${t.one}</span></div>
+      </div>
+    </div>
+    <div class="foot"><span>Payload CMS × A/B testing — three working demos</span><span style="display:inline-flex; align-items:center">${FOOT_BRAND}<span class="pageno">${t.page}</span></span></div>`;
+});
+
+// ---------- matrix table ----------
+const M = [
+  ['','PostHog · :3000','Statsig · :3001','GrowthBook · :3002'],
+  ['Integration','payload-ab plugin, one config line','DIY glue, ~120 lines','DIY glue, ~100 lines'],
+  ['Variants per test','2 only: plugin limit (PostHog itself allows up to 10 arms)','n-way (named keys)','n-way (array index)'],
+  ['Bucketing','PostHog flag: API call per visitor','Local eval after rules sync','Local deterministic hash'],
+  ['Conversion tracking','Client-side as shipped; server-side possible via posthog-node','Server-side logEvent','Server-side, into own DB'],
+  ['Where events live','PostHog cloud','Statsig cloud','Your store (ab-events / warehouse)'],
+  ['Works offline','No: always control (demo adds cookie mode)','No (demo adds hash mode)','Yes: native inline experiments'],
+  ['Authoring UX','Dedicated A/B tab per document','Plain array field','Array field + AB Events viewer'],
+  ['Stats engine','Built-in (Bayesian)','Built-in (CUPED, sequential)','Queries your warehouse'],
+  ['Open source / self-host','Core is OSS; cloud-first','No','Yes, fully'],
+  ['Maintenance risk','Plugin repo went private','Our glue + vendor SDK','Our glue + OSS SDK'],
+];
+const DOTS = ['', 'var(--posthog)', 'var(--statsig)', 'var(--growthbook)'];
+const tbl = document.getElementById('matrix');
+tbl.querySelector('thead').innerHTML = '<tr>' + M[0].map((h,i)=>`<th style="background:var(--ink); color:var(--d1); padding:13px 18px; font-size:16px; text-align:${i?'center':'left'}; ${i===0?'border-radius:6px 0 0 0; width:230px':''}${i===3?'border-radius:0 6px 0 0':''}">${i?`<span class="tooldot" style="background:${DOTS[i]}; width:9px; height:9px"></span>`:''}${h}</th>`).join('') + '</tr>';
+tbl.querySelector('tbody').innerHTML = M.slice(1).map(r=>'<tr>'+r.map((c,i)=>i===0
+  ? `<td style="background:var(--accent-soft); font-weight:600; padding:11px 18px; border-bottom:2px solid var(--bone); font-size:15.5px">${c}</td>`
+  : `<td style="background:#FBFAF6; padding:11px 18px; border-bottom:2px solid var(--bone); border-left:2px solid var(--bone); font-size:15px; color:var(--t1)">${c}</td>`).join('')+'</tr>').join('');
+
+// ---------- risk grid ----------
+const RISK = [
+  ['posthog','PostHog','Plugin repo went private; v0.3.5, single maintainer; 2-arm tests only.','Vendor the plugin source from npm into the repo (it ships complete); revisit if it stalls.','Generous free tier comfortably covers the POC and early production volumes.'],
+  ['statsig','Statsig','Everything is DIY surface we maintain; event data lives in Statsig’s cloud.','The glue is small (~120 lines) and mirrors Statsig’s own documented Contentful blueprint.','Free developer tier; commercial pricing arrives with scale.'],
+  ['growthbook','GrowthBook','Scorecards need a warehouse connection and metric definitions; self-hosting adds ops.','Start on GrowthBook Cloud, move self-hosted later. SDK and data model do not change.','Open source: at scale you pay infra, not per event.'],
+];
+document.getElementById('riskgrid').innerHTML = RISK.map(r=>`
+  <div class="card" style="padding:30px 34px">
+    <h3 style="font-size:27px; letter-spacing:-0.024em"><span class="tooldot" style="background:var(--${r[0]})"></span>${r[1]}</h3>
+    <div class="label" style="margin-top:24px">Risk</div><p style="font-size:15.5px; color:var(--t2); line-height:1.5; margin-top:6px">${r[2]}</p>
+    <div class="label" style="margin-top:20px">Mitigation</div><p style="font-size:15.5px; color:var(--t2); line-height:1.5; margin-top:6px">${r[3]}</p>
+    <div class="label" style="margin-top:20px">Cost picture</div><p style="font-size:15.5px; color:var(--t2); line-height:1.5; margin-top:6px">${r[4]}</p>
+  </div>`).join('');
+
+// ---------- deck runtime ----------
+const slides = [...document.querySelectorAll('.slide')];
+let cur = 0;
+function fit() {
+  const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+  slides.forEach(sl => sl.style.transform = `translate(-50%, -50%) scale(${s})`);
+}
+function show(i) {
+  cur = Math.max(0, Math.min(slides.length - 1, i));
+  slides.forEach((sl, j) => sl.classList.toggle('active', j === cur));
+  location.hash = cur + 1;
+}
+addEventListener('resize', fit);
+addEventListener('keydown', e => {
+  if (['ArrowRight','PageDown',' '].includes(e.key)) { e.preventDefault(); show(cur + 1); }
+  if (['ArrowLeft','PageUp'].includes(e.key)) { e.preventDefault(); show(cur - 1); }
+  if (e.key === 'Home') show(0);
+  if (e.key === 'End') show(slides.length - 1);
+});
+document.getElementById('next').onclick = () => show(cur + 1);
+document.getElementById('prev').onclick = () => show(cur - 1);
+fit();
+show((parseInt(location.hash.slice(1)) || 1) - 1);
+</script>
+</body>
+</html>

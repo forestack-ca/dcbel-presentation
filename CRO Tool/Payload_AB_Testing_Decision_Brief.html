@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Payload A/B testing: the decision — Forestack</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+/* ============ Forestack tokens (forestack-brand/assets/tokens.css) ============ */
+:root {
+  --bone:#F0EDE5; --bone-2:#EAE6DB; --bone-3:#DFDACB;
+  --bone-line:rgba(20,18,28,0.08); --bone-line-2:rgba(20,18,28,0.16);
+  --ink:#0E0C14; --ink-2:#14121C; --ink-3:#1F1C28;
+  --ink-line:rgba(240,237,229,0.10); --ink-line-2:rgba(240,237,229,0.18);
+  --t1:#15131C; --t2:#4F4B59; --t3:#87838E; --t4:rgba(20,18,28,0.36);
+  --d1:#F0EDE5; --d2:#B8B5C0; --d3:#7A7682; --d4:rgba(240,237,229,0.34);
+  --accent:#2547D6; --accent-bright:#6B8AF0; --accent-soft:rgba(37,71,214,0.10);
+  --copper:#B8835A; --live:#5BB87C;
+  --expo:cubic-bezier(0.16, 1, 0.3, 1);
+  --posthog:#F54E00; --statsig:#4F6BED; --growthbook:#7C3AED;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+html { -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; text-rendering:optimizeLegibility; }
+body { background:var(--ink); font-family:'Space Grotesk',-apple-system,BlinkMacSystemFont,system-ui,sans-serif; font-feature-settings:'ss01'; overflow:hidden; }
+em { font-style:normal; color:var(--accent); }
+.slide.ink em { color:var(--accent-bright); }
+
+.viewport { position:fixed; inset:0; }
+.slide { position:absolute; top:50%; left:50%; width:1920px; height:1080px; transform-origin:center center; visibility:hidden; opacity:0; transition:opacity 0.5s var(--expo); padding:96px 110px 88px; display:flex; flex-direction:column; }
+.slide.active { visibility:visible; opacity:1; }
+.slide.bone { background:var(--bone); color:var(--t1); }
+.slide.ink { background:var(--ink); color:var(--d1); }
+.slide.ink::before { content:''; position:absolute; inset:0; pointer-events:none;
+  background: radial-gradient(ellipse 1100px 600px at 80% 20%, rgba(91,122,233,0.14), transparent 60%),
+              radial-gradient(ellipse 700px 500px at 0% 100%, rgba(184,131,90,0.06), transparent 60%); }
+.slide > * { position:relative; z-index:1; }
+
+.reveal { opacity:0; transform:translateY(24px); transition:opacity 0.9s var(--expo), transform 0.9s var(--expo); }
+.slide.active .reveal { opacity:1; transform:translateY(0); }
+.slide.active .reveal:nth-child(2){transition-delay:60ms} .slide.active .reveal:nth-child(3){transition-delay:120ms}
+.slide.active .reveal:nth-child(4){transition-delay:180ms} .slide.active .reveal:nth-child(5){transition-delay:240ms}
+
+.kicker { display:inline-flex; align-items:center; gap:14px; font-size:15px; font-weight:500; letter-spacing:0.22em; color:var(--t3); text-transform:uppercase; }
+.kicker .rom { color:var(--accent); font-feature-settings:'tnum'; letter-spacing:0.16em; }
+.kicker .bar { width:28px; height:1px; background:var(--bone-line-2); display:inline-block; }
+.slide.ink .kicker { color:var(--d3); } .slide.ink .kicker .rom { color:var(--accent-bright); } .slide.ink .kicker .bar { background:var(--ink-line-2); }
+h2.display { font-size:68px; font-weight:600; line-height:0.98; letter-spacing:-0.034em; margin:18px 0 0; text-wrap:balance; }
+.subtitle { font-size:21px; line-height:1.5; letter-spacing:-0.005em; color:var(--t2); max-width:880px; margin-top:22px; }
+.slide.ink .subtitle { color:var(--d2); }
+.num { font-feature-settings:'tnum'; }
+
+.foot { position:absolute; left:110px; right:110px; bottom:44px; display:flex; align-items:center; justify-content:space-between; font-size:14px; color:var(--t3); z-index:2; }
+.slide.ink .foot { color:var(--d3); }
+.brand { display:inline-flex; align-items:center; gap:10px; font-weight:600; font-size:17px; letter-spacing:-0.01em; color:var(--t1); }
+.slide.ink .brand { color:var(--d1); }
+.brand svg { width:22px; height:22px; border-radius:4px; }
+.pageno { font-feature-settings:'tnum'; margin-left:18px; color:var(--t3); font-weight:500; }
+.slide.ink .pageno { color:var(--d3); }
+
+.card { background:#FBFAF6; border:1px solid var(--bone-line-2); border-radius:6px; box-shadow:0 1px 0 rgba(255,255,255,0.6) inset, 0 1px 2px rgba(20,18,28,0.03); }
+.slide.ink .card { background:var(--ink-2); border-color:var(--ink-line-2); box-shadow:none; }
+.canvas-chrome { background:var(--bone); border:1px solid var(--bone-line-2); border-radius:8px; box-shadow:0 1px 0 rgba(255,255,255,0.4) inset, 0 14px 36px -20px rgba(20,18,28,0.14), 0 2px 8px -4px rgba(20,18,28,0.04); position:relative; overflow:hidden; }
+.canvas-chrome::before { content:''; position:absolute; inset:0; background-image:linear-gradient(to right, rgba(20,18,28,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(20,18,28,0.06) 1px, transparent 1px); background-size:28px 28px; -webkit-mask-image:radial-gradient(ellipse 78% 70% at 50% 50%, #000 18%, transparent 92%); mask-image:radial-gradient(ellipse 78% 70% at 50% 50%, #000 18%, transparent 92%); pointer-events:none; }
+.canvas-chrome > * { position:relative; z-index:1; }
+.tooldot { display:inline-block; width:11px; height:11px; border-radius:50%; vertical-align:baseline; margin-right:10px; }
+.chip { display:inline-flex; align-items:center; border-radius:999px; padding:6px 14px; font-size:12px; font-weight:700; letter-spacing:0.16em; text-transform:uppercase; color:#fff; background:var(--accent); }
+.live-dot { width:8px; height:8px; border-radius:50%; background:var(--live); box-shadow:0 0 0 0 rgba(91,184,124,0.6); animation:livePulse 2.4s var(--expo) infinite; }
+@keyframes livePulse { 0%{box-shadow:0 0 0 0 rgba(91,184,124,0.45)} 70%{box-shadow:0 0 0 10px rgba(91,184,124,0)} 100%{box-shadow:0 0 0 0 rgba(91,184,124,0)} }
+.label { font-size:12.5px; font-weight:700; letter-spacing:0.22em; text-transform:uppercase; color:var(--t3); }
+.slide.ink .label { color:var(--d3); }
+
+.deck-nav { position:fixed; right:14px; bottom:14px; display:flex; gap:8px; z-index:50; }
+.deck-nav button { width:36px; height:36px; border-radius:999px; border:1px solid rgba(240,237,229,0.28); background:transparent; color:var(--d1); font-size:17px; cursor:pointer; font-family:inherit; transition:background 0.4s var(--expo), border-color 0.4s var(--expo); }
+.deck-nav button:hover { background:rgba(240,237,229,0.06); border-color:var(--accent-bright); }
+@media (prefers-reduced-motion:reduce) {
+  *, *::before, *::after { animation-duration:0.01ms !important; transition-duration:0.01ms !important; }
+  .reveal { opacity:1 !important; transform:none !important; }
+}
+</style>
+</head>
+<body>
+<div class="viewport">
+
+<!-- ============ SLIDE 1 — TITLE (ink) ============ -->
+<section class="slide ink">
+  <div style="margin-top:130px">
+    <div class="reveal brand" style="font-size:34px; gap:14px"><svg viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg"><rect width="180" height="180" fill="#2547D6"/><g transform="translate(42 40.5) scale(0.2866)" fill="#FFFFFF"><path d="M43 0H325C330.523 0 335 4.47715 335 10V90C335 95.5228 330.523 100 325 100H43V0Z"/><path d="M43 124H183C188.523 124 193 128.477 193 134V214C193 219.523 188.523 224 183 224H43V124Z"/><path d="M43 248H83C88.5228 248 93 252.477 93 258V338C93 343.523 88.5228 348 83 348H43V248Z"/><rect width="27" height="348" rx="5"/></g></svg> Forestack</div>
+    <div class="reveal" style="width:64px; height:7px; background:var(--accent-bright); margin:26px 0 56px"></div>
+    <div class="reveal kicker" style="font-size:16px"><span class="live-dot"></span> DECISION BRIEF <span class="bar"></span> CRO TOOLING <span class="bar"></span> DCBEL PHASE ONE</div>
+    <h2 class="reveal display" style="font-size:112px; max-width:16ch; margin-top:28px">Payload A/B testing: <em>the decision</em>.</h2>
+    <p class="reveal subtitle" style="font-size:24px; max-width:1000px">Three tools, three working demos, one recommendation. The next three slides hold everything needed to choose.</p>
+  </div>
+  <div class="foot">
+    <span style="display:flex; gap:56px">
+      <span><span class="tooldot" style="background:var(--posthog)"></span>PostHog</span>
+      <span><span class="tooldot" style="background:var(--statsig)"></span>Statsig</span>
+      <span><span class="tooldot" style="background:var(--growthbook)"></span>GrowthBook</span>
+    </span>
+    <span>June 2026 · all three demos live &amp; seeded</span>
+  </div>
+</section>
+
+<!-- ============ SLIDE 2 — SHORTLIST (bone) ============ -->
+<section class="slide bone">
+  <div class="reveal kicker"><span class="rom">02</span><span class="bar"></span> The shortlist</div>
+  <h2 class="reveal display">Ten tools reviewed. <em>Three</em> made the cut.</h2>
+  <p class="reveal subtitle">We scanned the mid-2026 CRO market end to end: enterprise SaaS, open source, Google-native, AI-generation. Three earned a working demo. Each answers a different question, and all three plug into Payload.</p>
+
+  <div class="reveal canvas-chrome" style="margin-top:48px; padding:44px 52px">
+    <div class="label" style="margin-bottom:24px">Reviewed</div>
+    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:22px 36px; line-height:1.3">
+      <span style="color:var(--t4); font-size:22px">VWO</span>
+      <span style="color:var(--t4); font-size:22px">Convert.com</span>
+      <span style="color:var(--t1); font-weight:600; font-size:26px"><span class="tooldot" style="background:var(--posthog); width:13px; height:13px"></span>PostHog</span>
+      <span style="color:var(--t4); font-size:22px">Kameleoon</span>
+      <span style="color:var(--t4); font-size:22px">Firebase A/B</span>
+      <span style="color:var(--t1); font-weight:600; font-size:26px"><span class="tooldot" style="background:var(--statsig); width:13px; height:13px"></span>Statsig</span>
+      <span style="color:var(--t4); font-size:22px">Mida</span>
+      <span style="color:var(--t4); font-size:22px">Varify.io</span>
+      <span style="color:var(--t1); font-weight:600; font-size:26px"><span class="tooldot" style="background:var(--growthbook); width:13px; height:13px"></span>GrowthBook</span>
+      <span style="color:var(--t4); font-size:22px">Crazy Egg</span>
+    </div>
+  </div>
+
+  <div class="reveal" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:22px; margin-top:30px; margin-bottom:auto">
+    <div class="card" style="padding:22px 26px">
+      <div style="font-size:20px; font-weight:600"><span class="tooldot" style="background:var(--posthog)"></span>PostHog</div>
+      <p style="font-size:15px; color:var(--t2); line-height:1.5; margin-top:8px">The only one with a published Payload plugin. Shortest path to a live test.</p>
+    </div>
+    <div class="card" style="padding:22px 26px">
+      <div style="font-size:20px; font-weight:600"><span class="tooldot" style="background:var(--statsig)"></span>Statsig</div>
+      <p style="font-size:15px; color:var(--t2); line-height:1.5; margin-top:8px">Strongest stats engine in the set: CUPED, sequential, holdouts.</p>
+    </div>
+    <div class="card" style="padding:22px 26px">
+      <div style="font-size:20px; font-weight:600"><span class="tooldot" style="background:var(--growthbook)"></span>GrowthBook</div>
+      <p style="font-size:15px; color:var(--t2); line-height:1.5; margin-top:8px">Open source and warehouse-native. Fabric stays the source of truth.</p>
+    </div>
+  </div>
+
+  <div class="foot"><span>Filter: integrates with Payload, has a real stats engine, and is operable by marketing inside the admin.</span><span class="brand"><svg viewBox="0 0 180 180"><rect width="180" height="180" fill="#2547D6"/><g transform="translate(42 40.5) scale(0.2866)" fill="#FFF"><path d="M43 0H325C330.523 0 335 4.47715 335 10V90C335 95.5228 330.523 100 325 100H43V0Z"/><path d="M43 124H183C188.523 124 193 128.477 193 134V214C193 219.523 188.523 224 183 224H43V124Z"/><path d="M43 248H83C88.5228 248 93 252.477 93 258V338C93 343.523 88.5228 348 83 348H43V248Z"/><rect width="27" height="348" rx="5"/></g></svg>Forestack<span class="pageno">2 / 5</span></span></div>
+</section>
+
+<!-- ============ SLIDE 3 — DIFFERENCES (bone) ============ -->
+<section class="slide bone">
+  <div class="reveal kicker"><span class="rom">03</span><span class="bar"></span> Everything is identical except the tool. These are the differences that decide</div>
+  <h2 class="reveal display">What actually separates them.</h2>
+  <div class="reveal canvas-chrome" style="margin-top:40px; padding:32px 40px">
+    <table id="matrix" style="width:100%; border-collapse:collapse; font-size:16px"><thead></thead><tbody></tbody></table>
+  </div>
+  <div class="reveal" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:22px; margin-top:30px">
+    <div class="card" style="padding:16px 22px"><div class="label" style="font-size:11.5px">Fastest to ship</div><div style="font-size:21px; font-weight:600; margin-top:4px"><span class="tooldot" style="background:var(--posthog)"></span>PostHog</div></div>
+    <div class="card" style="padding:16px 22px"><div class="label" style="font-size:11.5px">Most advanced</div><div style="font-size:21px; font-weight:600; margin-top:4px"><span class="tooldot" style="background:var(--statsig)"></span>Statsig</div></div>
+    <div class="card" style="padding:16px 22px"><div class="label" style="font-size:11.5px">Most features</div><div style="font-size:21px; font-weight:600; margin-top:4px"><span class="tooldot" style="background:var(--posthog)"></span>PostHog</div></div>
+    <div class="card" style="padding:16px 22px"><div class="label" style="font-size:11.5px">Best dcbel fit</div><div style="font-size:21px; font-weight:600; margin-top:4px"><span class="tooldot" style="background:var(--growthbook)"></span>GrowthBook</div></div>
+  </div>
+  <div class="foot"><span>Full evidence: 12-slide comparison deck. All three demos verified with real requests.</span><span class="brand"><svg viewBox="0 0 180 180"><rect width="180" height="180" fill="#2547D6"/><g transform="translate(42 40.5) scale(0.2866)" fill="#FFF"><path d="M43 0H325C330.523 0 335 4.47715 335 10V90C335 95.5228 330.523 100 325 100H43V0Z"/><path d="M43 124H183C188.523 124 193 128.477 193 134V214C193 219.523 188.523 224 183 224H43V124Z"/><path d="M43 248H83C88.5228 248 93 252.477 93 258V338C93 343.523 88.5228 348 83 348H43V248Z"/><rect width="27" height="348" rx="5"/></g></svg>Forestack<span class="pageno">3 / 5</span></span></div>
+</section>
+
+<!-- ============ SLIDE 4 — DECISION RULE (bone) ============ -->
+<section class="slide bone">
+  <div class="reveal kicker"><span class="rom">04</span><span class="bar"></span> The decision rule</div>
+  <h2 class="reveal display">Pick by the question you’re answering.</h2>
+  <div class="reveal" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:26px; margin-top:auto; margin-bottom:auto">
+
+    <div class="card" style="padding:32px 34px; position:relative">
+      <h3 style="font-size:28px; letter-spacing:-0.024em"><span class="tooldot" style="background:var(--posthog)"></span>PostHog</h3>
+      <p style="font-size:18px; font-weight:600; font-style:italic; color:var(--accent); margin-top:16px">“We want a live test this week.”</p>
+      <div class="label" style="margin-top:26px">Why</div><p style="font-size:15.5px; color:var(--t2); line-height:1.5; margin-top:6px">One afternoon to a working test; editors run everything from the Payload admin tab.</p>
+      <div class="label" style="margin-top:20px">Key risk</div><p style="font-size:15.5px; color:var(--t2); line-height:1.5; margin-top:6px">Plugin repo went private; 2-arm tests only.</p>
+      <div class="label" style="margin-top:20px">Mitigation</div><p style="font-size:15.5px; color:var(--t2); line-height:1.5; margin-top:6px">Vendor the plugin source from npm; fork if it stalls.</p>
+    </div>
+
+    <div class="card" style="padding:32px 34px">
+      <h3 style="font-size:28px; letter-spacing:-0.024em"><span class="tooldot" style="background:var(--statsig)"></span>Statsig</h3>
+      <p style="font-size:18px; font-weight:600; font-style:italic; color:var(--accent); margin-top:16px">“We’re building an experimentation program.”</p>
+      <div class="label" style="margin-top:26px">Why</div><p style="font-size:15.5px; color:var(--t2); line-height:1.5; margin-top:6px">Strongest stats engine (CUPED, sequential, holdouts) for hundreds of concurrent tests.</p>
+      <div class="label" style="margin-top:20px">Key risk</div><p style="font-size:15.5px; color:var(--t2); line-height:1.5; margin-top:6px">Most build effort; event data lives in Statsig’s cloud.</p>
+      <div class="label" style="margin-top:20px">Mitigation</div><p style="font-size:15.5px; color:var(--t2); line-height:1.5; margin-top:6px">Glue mirrors Statsig’s documented Contentful blueprint.</p>
+    </div>
+
+    <div class="card" style="padding:32px 34px">
+      <h3 style="font-size:28px; letter-spacing:-0.024em"><span class="tooldot" style="background:var(--growthbook)"></span>GrowthBook</h3>
+      <p style="font-size:18px; font-weight:600; font-style:italic; color:var(--accent); margin-top:16px">“The lakehouse stays the source of truth.”</p>
+      <div class="label" style="margin-top:26px">Why</div><p style="font-size:15.5px; color:var(--t2); line-height:1.5; margin-top:6px">Warehouse-native results, open source, n-way tests, zero network on the page view.</p>
+      <div class="label" style="margin-top:20px">Key risk</div><p style="font-size:15.5px; color:var(--t2); line-height:1.5; margin-top:6px">Scorecards need a warehouse connection and defined metrics.</p>
+      <div class="label" style="margin-top:20px">Mitigation</div><p style="font-size:15.5px; color:var(--t2); line-height:1.5; margin-top:6px">Start on GrowthBook Cloud; self-host later, nothing changes.</p>
+    </div>
+
+  </div>
+  <div class="foot"><span>Payload A/B testing — decision brief</span><span class="brand"><svg viewBox="0 0 180 180"><rect width="180" height="180" fill="#2547D6"/><g transform="translate(42 40.5) scale(0.2866)" fill="#FFF"><path d="M43 0H325C330.523 0 335 4.47715 335 10V90C335 95.5228 330.523 100 325 100H43V0Z"/><path d="M43 124H183C188.523 124 193 128.477 193 134V214C193 219.523 188.523 224 183 224H43V124Z"/><path d="M43 248H83C88.5228 248 93 252.477 93 258V338C93 343.523 88.5228 348 83 348H43V248Z"/><rect width="27" height="348" rx="5"/></g></svg>Forestack<span class="pageno">4 / 5</span></span></div>
+</section>
+
+<!-- ============ SLIDE 5 — RECOMMENDATION (ink) ============ -->
+<section class="slide ink">
+  <div class="reveal kicker"><span class="rom">05</span><span class="bar"></span> Decide, then do this</div>
+  <h2 class="reveal display" style="font-size:58px">The recommendation.</h2>
+  <div class="reveal" style="display:grid; grid-template-columns:1.15fr 0.85fr; gap:80px; margin-top:auto; margin-bottom:auto">
+    <div>
+      <h3 style="font-size:52px; font-weight:600; letter-spacing:-0.034em; line-height:1.02">Talk to <em>all three</em>.</h3>
+      <p style="font-size:19px; color:var(--d2); line-height:1.55; margin-top:26px; max-width:60ch">Book demos with PostHog, Statsig and GrowthBook. Walk each vendor through the Payload setup, the Phase One CTA, and the 170-ZIP rollout — then pick by the condition that matters most.</p>
+      <p style="font-size:17px; color:var(--d2); line-height:1.55; margin-top:24px; max-width:62ch"><strong style="color:var(--d1)">If the priority is a Payload-native integration</strong> → <em>PostHog</em>. The only one with an existing payload-ab plugin; editors run the test from the admin tab.</p>
+      <p style="font-size:17px; color:var(--d2); line-height:1.55; margin-top:14px; max-width:62ch"><strong style="color:var(--d1)">If the priority is experimentation rigor</strong> → <em>Statsig</em>. Strongest stats engine (CUPED, sequential, holdouts) for a real program.</p>
+      <p style="font-size:17px; color:var(--d2); line-height:1.55; margin-top:14px; max-width:62ch"><strong style="color:var(--d1)">If the priority is lakehouse-native results</strong> → <em>GrowthBook</em>. Open source, queries Fabric directly, zero network on the page view.</p>
+    </div>
+    <div>
+      <div class="label" style="color:var(--accent-bright)">Next steps</div>
+      <ol style="margin:22px 0 0 22px; display:flex; flex-direction:column; gap:18px; font-size:17.5px; color:var(--d2); line-height:1.45">
+        <li>Contact PostHog, Statsig and GrowthBook; schedule a vendor demo with each</li>
+        <li>Walk each vendor through the feature set we need: variants, stats engine, session replay, warehouse export</li>
+        <li>Confirm the Payload integration path — plugin vs. custom glue — and what marketing edits inside the admin</li>
+        <li>Scope the setup: keys, env, server-side capture, and the Phase One CTA conversion metric by ZIP tier</li>
+      </ol>
+    </div>
+  </div>
+  <div class="foot"><span>A senior data &amp; AI agency. &nbsp;·&nbsp; Founder-led. &nbsp;·&nbsp; Embedded.</span><span class="brand"><svg viewBox="0 0 180 180"><rect width="180" height="180" fill="#2547D6"/><g transform="translate(42 40.5) scale(0.2866)" fill="#FFF"><path d="M43 0H325C330.523 0 335 4.47715 335 10V90C335 95.5228 330.523 100 325 100H43V0Z"/><path d="M43 124H183C188.523 124 193 128.477 193 134V214C193 219.523 188.523 224 183 224H43V124Z"/><path d="M43 248H83C88.5228 248 93 252.477 93 258V338C93 343.523 88.5228 348 83 348H43V248Z"/><rect width="27" height="348" rx="5"/></g></svg>Forestack<span class="pageno">5 / 5</span></span></div>
+</section>
+
+</div>
+
+<div class="deck-nav"><button id="prev" aria-label="Previous slide">←</button><button id="next" aria-label="Next slide">→</button></div>
+
+<script>
+// ---------- differences table ----------
+const M = [
+  ['','PostHog','Statsig','GrowthBook'],
+  ['Integration effort','Plugin, one config line (~0.5 day)','DIY glue, ~120 lines (~1.5 days)','DIY glue, ~100 lines (~1 day)'],
+  ['Variants per test','2 only: plugin limit','n-way','n-way'],
+  ['Page-view cost','API call per visitor','Local eval after sync','Local hash, zero network'],
+  ['Where events live','PostHog cloud','Statsig cloud','Your store / Fabric lakehouse'],
+  ['Stats engine','Built-in (Bayesian)','Built-in (CUPED, sequential)','Queries your warehouse'],
+  ['Maintenance risk','Community plugin went private','Our glue + vendor SDK','Our glue + open-source SDK'],
+  ['Cost shape','Free tier, then per-event SaaS','Free dev tier, then enterprise','Open source: infra only'],
+];
+const DOTS = ['', 'var(--posthog)', 'var(--statsig)', 'var(--growthbook)'];
+const tbl = document.getElementById('matrix');
+tbl.querySelector('thead').innerHTML = '<tr>' + M[0].map((h,i)=>`<th style="background:var(--ink); color:var(--d1); padding:12px 18px; font-size:16px; text-align:${i?'center':'left'}; ${i===0?'border-radius:6px 0 0 0; width:250px':''}${i===3?'border-radius:0 6px 0 0':''}">${i?`<span class="tooldot" style="background:${DOTS[i]}; width:9px; height:9px"></span>`:''}${h}</th>`).join('') + '</tr>';
+tbl.querySelector('tbody').innerHTML = M.slice(1).map(r=>'<tr>'+r.map((c,i)=>i===0
+  ? `<td style="background:var(--accent-soft); font-weight:600; padding:11px 18px; border-bottom:2px solid var(--bone); font-size:15.5px">${c}</td>`
+  : `<td style="background:#FBFAF6; padding:11px 18px; border-bottom:2px solid var(--bone); border-left:2px solid var(--bone); font-size:15px; color:var(--t1)">${c}</td>`).join('')+'</tr>').join('');
+
+// ---------- deck runtime ----------
+const slides = [...document.querySelectorAll('.slide')];
+let cur = 0;
+function fit() {
+  const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+  slides.forEach(sl => sl.style.transform = `translate(-50%, -50%) scale(${s})`);
+}
+function show(i) {
+  cur = Math.max(0, Math.min(slides.length - 1, i));
+  slides.forEach((sl, j) => sl.classList.toggle('active', j === cur));
+  location.hash = cur + 1;
+}
+addEventListener('resize', fit);
+addEventListener('keydown', e => {
+  if (['ArrowRight','PageDown',' '].includes(e.key)) { e.preventDefault(); show(cur + 1); }
+  if (['ArrowLeft','PageUp'].includes(e.key)) { e.preventDefault(); show(cur - 1); }
+  if (e.key === 'Home') show(0);
+  if (e.key === 'End') show(slides.length - 1);
+});
+document.getElementById('next').onclick = () => show(cur + 1);
+document.getElementById('prev').onclick = () => show(cur - 1);
+fit();
+show((parseInt(location.hash.slice(1)) || 1) - 1);
+</script>
+</body>
+</html>
