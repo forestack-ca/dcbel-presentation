@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DCBEL — Presentation index — Forestack</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --bone:#F0EDE5; --bone-2:#EAE6DB; --bone-line:rgba(20,18,28,0.08); --bone-line-2:rgba(20,18,28,0.16);
+  --ink:#0E0C14; --t1:#15131C; --t2:#4F4B59; --t3:#87838E; --t4:rgba(20,18,28,0.36);
+  --accent:#2547D6; --accent-soft:rgba(37,71,214,0.10);
+  --expo:cubic-bezier(0.16, 1, 0.3, 1);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+html { -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; text-rendering:optimizeLegibility; }
+body { background:var(--bone); color:var(--t1); font-family:'Space Grotesk',-apple-system,BlinkMacSystemFont,system-ui,sans-serif; font-feature-settings:'ss01'; min-height:100vh; display:flex; flex-direction:column; }
+
+.shell { max-width:980px; width:100%; margin:0 auto; padding:88px 48px 56px; flex:1; }
+.brand { display:inline-flex; align-items:center; gap:12px; font-weight:600; font-size:18px; letter-spacing:-0.01em; color:var(--t1); }
+.brand svg { width:22px; height:22px; border-radius:4px; }
+.bar { width:64px; height:6px; background:var(--accent); margin:28px 0 40px; }
+
+.kicker { display:inline-flex; align-items:center; gap:14px; font-size:13px; font-weight:500; letter-spacing:0.22em; color:var(--t3); text-transform:uppercase; }
+.kicker .rom { color:var(--accent); font-feature-settings:'tnum'; letter-spacing:0.16em; }
+.kicker .line { width:28px; height:1px; background:var(--bone-line-2); display:inline-block; }
+
+h1 { font-size:64px; font-weight:600; line-height:0.98; letter-spacing:-0.034em; margin:20px 0 0; max-width:18ch; }
+h1 em { font-style:normal; color:var(--accent); }
+.lede { font-size:19px; line-height:1.55; color:var(--t2); max-width:62ch; margin-top:24px; }
+
+section.group { margin-top:56px; }
+.group-label { font-size:12.5px; font-weight:700; letter-spacing:0.22em; text-transform:uppercase; color:var(--t3); padding-bottom:14px; border-bottom:1px solid var(--bone-line-2); }
+
+.decks { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:18px; }
+@media (max-width:720px) { .decks { grid-template-columns:1fr; } .shell { padding:56px 28px 40px; } h1 { font-size:48px; } }
+
+a.deck { display:block; padding:24px 26px; background:#FBFAF6; border:1px solid var(--bone-line-2); border-radius:8px; text-decoration:none; color:inherit; transition:border-color 0.4s var(--expo), transform 0.4s var(--expo), box-shadow 0.4s var(--expo); }
+a.deck:hover { border-color:var(--accent); transform:translateY(-1px); box-shadow:0 8px 24px -16px rgba(20,18,28,0.18); }
+a.deck .name { font-size:19px; font-weight:600; letter-spacing:-0.012em; display:flex; align-items:center; justify-content:space-between; gap:18px; }
+a.deck .name .arrow { color:var(--accent); font-size:20px; transition:transform 0.4s var(--expo); }
+a.deck:hover .name .arrow { transform:translateX(4px); }
+a.deck .meta { font-size:14px; color:var(--t3); margin-top:8px; font-feature-settings:'tnum'; }
+
+footer { padding:32px 48px; border-top:1px solid var(--bone-line-2); font-size:13.5px; color:var(--t3); display:flex; justify-content:space-between; gap:24px; flex-wrap:wrap; }
+footer .right { color:var(--t4); }
+@media (max-width:720px) { footer { padding:24px 28px; } }
+</style>
+</head>
+<body>
+<main class="shell">
+  <div class="brand">
+    <svg viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg"><rect width="180" height="180" fill="#2547D6"/><g transform="translate(42 40.5) scale(0.2866)" fill="#FFF"><path d="M43 0H325C330.523 0 335 4.47715 335 10V90C335 95.5228 330.523 100 325 100H43V0Z"/><path d="M43 124H183C188.523 124 193 128.477 193 134V214C193 219.523 188.523 224 183 224H43V124Z"/><path d="M43 248H83C88.5228 248 93 252.477 93 258V338C93 343.523 88.5228 348 83 348H43V248Z"/><rect width="27" height="348" rx="5"/></g></svg>
+    Forestack
+  </div>
+  <div class="bar"></div>
+
+  <div class="kicker"><span class="rom">DCBEL</span><span class="line"></span> Presentation index</div>
+  <h1>The decks, <em>live</em>.</h1>
+  <p class="lede">Two work streams, four interactive decks. Open any one in your browser — keyboard arrows page through, the layout fits any screen.</p>
+
+  <section class="group">
+    <div class="group-label">CRO tool</div>
+    <div class="decks">
+      <a class="deck" href="CRO%20Tool/Payload_AB_Testing_Decision_Brief.html">
+        <div class="name">Decision brief <span class="arrow">→</span></div>
+        <div class="meta">5 slides · the recommendation</div>
+      </a>
+      <a class="deck" href="CRO%20Tool/Payload_AB_Testing_Demos_Comparison.html">
+        <div class="name">Demos &amp; comparison <span class="arrow">→</span></div>
+        <div class="meta">Full evidence behind the brief</div>
+      </a>
+    </div>
+  </section>
+
+  <section class="group">
+    <div class="group-label">Asset dashboard mock</div>
+    <div class="decks">
+      <a class="deck" href="Asset%20Dashboard%20Mock/Ad_Asset_Analysis_Mock.html">
+        <div class="name">Ad asset analysis <span class="arrow">→</span></div>
+        <div class="meta">With model layer</div>
+      </a>
+      <a class="deck" href="Asset%20Dashboard%20Mock/Ad_Asset_Analysis_Mock_NoModel.html">
+        <div class="name">Ad asset analysis <span class="arrow">→</span></div>
+        <div class="meta">No model layer</div>
+      </a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span>A senior data &amp; AI agency. &nbsp;·&nbsp; Founder-led. &nbsp;·&nbsp; Embedded.</span>
+  <span class="right">DCBEL · 2026</span>
+</footer>
+</body>
+</html>
